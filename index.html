@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enterprise System Builder</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="/_sdk/data_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <style>
+  html, body { height: 100%; margin: 0; }
+  * { font-family: 'Space Grotesk', sans-serif; }
+  code, .mono { font-family: 'JetBrains Mono', monospace; }
+
+  @keyframes terminalBlink { 0%,50%{opacity:1}51%,100%{opacity:0} }
+  .cursor-blink { animation: terminalBlink 1s infinite; }
+
+  @keyframes slideUp { from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)} }
+  .slide-up { animation: slideUp 0.4s ease-out forwards; opacity:0; }
+
+  @keyframes pulse-ring { 0%{transform:scale(0.8);opacity:1}100%{transform:scale(1.4);opacity:0} }
+  .pulse-ring::before { content:''; position:absolute; inset:-4px; border-radius:50%; border:2px solid currentColor; animation:pulse-ring 1.5s infinite; }
+
+  .terminal-bg { background: #0a0e17; }
+  .terminal-border { border-color: #1a2332; }
+  .glass-panel { background: rgba(15,23,42,0.85); backdrop-filter: blur(12px); border: 1px solid rgba(56,189,248,0.15); }
+
+  .progress-fill { transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
+
+  .module-card { transition: all 0.3s ease; }
+  .module-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+  .module-card.locked { opacity: 0.5; pointer-events: none; }
+  .module-card.completed { border-color: #10b981 !important; }
+  .module-card.active { border-color: #38bdf8 !important; }
+
+  .config-field { transition: border-color 0.2s; }
+  .config-field:focus { border-color: #38bdf8; outline: none; }
+  .config-field.error { border-color: #ef4444; }
+  .config-field.valid { border-color: #10b981; }
+
+  .toast { animation: slideUp 0.3s ease-out; }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #0a0e17; }
+  ::-webkit-scrollbar-thumb { background: #1e3a5f; border-radius: 3px; }
+</style>
+  <style>body { box-sizing: border-box; }</style>
+ </head>
+ <body class="h-full terminal-bg text-gray-200 overflow-auto">
+  <div id="app" class="w-full h-full flex flex-col"><!-- SCREEN: NAME ENTRY -->
+   <div id="screen-login" class="w-full h-full flex items-center justify-center p-4">
+    <div class="glass-panel rounded-2xl p-8 max-w-md w-full slide-up">
+     <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-sky-500/10 border border-sky-500/30 mb-4"><i data-lucide="server" class="w-8 h-8 text-sky-400"></i>
+      </div>
+      <h1 id="el-main-title" class="text-2xl font-bold text-white mb-2">Enterprise System Builder</h1>
+      <p id="el-welcome-message" class="text-gray-400 text-sm">Build a complete enterprise system from scratch</p>
+     </div>
+     <div class="mb-2"><label class="block text-xs text-gray-400 mb-1.5 mono uppercase tracking-wider">Student Name</label> <input id="name-input" type="text" placeholder="Enter your full name..." class="config-field w-full bg-slate-900/80 border border-slate-700 rounded-lg px-4 py-3 text-white mono text-sm placeholder-gray-600" maxlength="60">
+      <p id="name-error" class="text-red-400 text-xs mt-1 hidden">Please enter at least 2 characters</p>
+     </div><button id="start-btn" onclick="startChallenge()" class="w-full mt-4 bg-sky-600 hover:bg-sky-500 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"> <i data-lucide="terminal" class="w-4 h-4"></i> Initialize System </button>
+     <div class="mt-6 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+      <p class="text-amber-300 text-xs mono leading-relaxed"><i data-lucide="alert-triangle" class="w-3 h-3 inline mr-1"></i> Warning: This simulation requires careful configuration. Incorrect values will be rejected. You must complete all 6 modules.</p>
+     </div>
+    </div>
+   </div><!-- SCREEN: MAIN BUILDER -->
+   <div id="screen-builder" class="w-full h-full flex flex-col hidden"><!-- Top Bar -->
+    <header class="w-full border-b terminal-border px-4 py-3 flex items-center justify-between flex-shrink-0">
+     <div class="flex items-center gap-3"><i data-lucide="server" class="w-5 h-5 text-sky-400"></i> <span class="font-bold text-white text-sm">ESB</span> <span class="text-gray-500 text-xs mono">v2.4</span>
+     </div>
+     <div class="flex items-center gap-4"><span id="student-label" class="text-xs text-gray-400 mono"></span> <span id="timer-label" class="text-xs text-sky-300 mono">00:00</span>
+     </div>
+    </header><!-- Progress -->
+    <div class="w-full px-4 py-2 border-b terminal-border flex-shrink-0">
+     <div class="flex items-center justify-between mb-1"><span class="text-xs text-gray-400">System Build Progress</span> <span id="progress-text" class="text-xs text-sky-300 mono">0 / 6 modules</span>
+     </div>
+     <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+      <div id="progress-bar" class="h-full bg-gradient-to-r from-sky-600 to-emerald-500 rounded-full progress-fill" style="width:0%"></div>
+     </div>
+    </div><!-- Content Area -->
+    <div class="flex-1 overflow-auto p-4"><!-- Module Grid -->
+     <div id="module-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4"></div><!-- Active Module Panel -->
+     <div id="module-panel" class="glass-panel rounded-xl p-6 hidden slide-up"></div>
+    </div><!-- Bottom Status -->
+    <footer class="w-full border-t terminal-border px-4 py-2 flex items-center justify-between flex-shrink-0">
+     <div id="status-msg" class="text-xs text-gray-500 mono flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-sky-500 inline-block"></span> System ready
+     </div>
+     <div id="score-label" class="text-xs text-emerald-400 mono">
+      Score: 0
+     </div>
+    </footer>
+   </div><!-- SCREEN: RESULTS -->
+   <div id="screen-results" class="w-full h-full flex items-center justify-center p-4 hidden">
+    <div id="results-panel" class="glass-panel rounded-2xl p-8 max-w-lg w-full slide-up text-center"></div>
+   </div>
+  </div><!-- Toast Container -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+  <script>
+// ===== STATE =====
+let studentName = '';
+let timerInterval = null;
+let startTime = 0;
+let currentScore = 0;
+let completedModules = new Set();
+let activeModule = null;
+let allSubmissions = [];
+
+const defaultConfig = {
+  main_title: 'Enterprise System Builder',
+  welcome_message: 'Build a complete enterprise system from scratch',
+  background_color: '#0a0e17',
+  surface_color: '#0f172a',
+  text_color: '#e2e8f0',
+  primary_color: '#0284c7',
+  accent_color: '#10b981',
+  font_family: 'Space Grotesk',
+  font_size: 14
+};
+
+// ===== MODULES DEFINITION =====
+const modules = [
+  {
+    id: 'database',
+    icon: 'database',
+    title: 'Database Architecture',
+    desc: 'Configure the relational database schema',
+    fields: [
+      { key: 'db_engine', label: 'Database Engine', type: 'select', options: ['PostgreSQL','MySQL','Oracle','SQL Server'], answer: 'PostgreSQL', hint: 'Best open-source RDBMS for enterprise' },
+      { key: 'replication', label: 'Replication Mode', type: 'select', options: ['None','Master-Slave','Multi-Master','Synchronous'], answer: 'Synchronous', hint: 'Strongest consistency guarantee' },
+      { key: 'max_connections', label: 'Max DB Connections', type: 'number', answer: 500, validate: v => v >= 200 && v <= 1000, hint: 'Between 200-1000 for enterprise load' },
+      { key: 'backup_freq', label: 'Backup Frequency (hrs)', type: 'number', answer: 6, validate: v => v >= 1 && v <= 12, hint: 'Every 1-12 hours for compliance' },
+      { key: 'encryption', label: 'Encryption at Rest', type: 'select', options: ['None','AES-128','AES-256','RSA-2048'], answer: 'AES-256', hint: 'Industry standard for enterprise' }
+    ]
+  },
+  {
+    id: 'networking',
+    icon: 'network',
+    title: 'Network Configuration',
+    desc: 'Set up load balancing and network topology',
+    fields: [
+      { key: 'lb_algo', label: 'Load Balancer Algorithm', type: 'select', options: ['Round Robin','Least Connections','IP Hash','Weighted'], answer: 'Least Connections', hint: 'Best for uneven request processing times' },
+      { key: 'ssl_version', label: 'TLS Version', type: 'select', options: ['TLS 1.0','TLS 1.1','TLS 1.2','TLS 1.3'], answer: 'TLS 1.3', hint: 'Latest and most secure' },
+      { key: 'cdn_enabled', label: 'CDN Enabled', type: 'select', options: ['Yes','No'], answer: 'Yes', hint: 'Required for global enterprise delivery' },
+      { key: 'firewall_rules', label: 'Firewall Rules Count', type: 'number', answer: 25, validate: v => v >= 15 && v <= 50, hint: '15-50 rules for proper segmentation' },
+      { key: 'dns_failover', label: 'DNS Failover', type: 'select', options: ['None','Active-Passive','Active-Active'], answer: 'Active-Active', hint: 'Zero downtime requirement' }
+    ]
+  },
+  {
+    id: 'auth',
+    icon: 'shield',
+    title: 'Security & Access Control',
+    desc: 'Implement authentication and authorization',
+    fields: [
+      { key: 'auth_protocol', label: 'Auth Protocol', type: 'select', options: ['Basic Auth','OAuth 2.0','SAML','OpenID Connect'], answer: 'OAuth 2.0', hint: 'Modern enterprise standard' },
+      { key: 'mfa_type', label: 'MFA Method', type: 'select', options: ['None','SMS','TOTP','Hardware Key'], answer: 'TOTP', hint: 'Time-based OTP, secure and cost-effective' },
+      { key: 'session_timeout', label: 'Session Timeout (min)', type: 'number', answer: 30, validate: v => v >= 15 && v <= 60, hint: '15-60 min per security policy' },
+      { key: 'password_min', label: 'Min Password Length', type: 'number', answer: 12, validate: v => v >= 10 && v <= 20, hint: '10-20 chars for enterprise compliance' },
+      { key: 'rbac_model', label: 'Access Control Model', type: 'select', options: ['DAC','MAC','RBAC','ABAC'], answer: 'RBAC', hint: 'Role-Based: most common enterprise model' },
+      { key: 'audit_logging', label: 'Audit Logging', type: 'select', options: ['Disabled','Errors Only','All Actions','All + Reads'], answer: 'All Actions', hint: 'Full audit trail without read noise' }
+    ]
+  },
+  {
+    id: 'microservices',
+    icon: 'boxes',
+    title: 'Microservices Architecture',
+    desc: 'Design the service mesh and communication',
+    fields: [
+      { key: 'comm_protocol', label: 'Inter-Service Protocol', type: 'select', options: ['REST','gRPC','GraphQL','SOAP'], answer: 'gRPC', hint: 'Fastest for internal service communication' },
+      { key: 'msg_broker', label: 'Message Broker', type: 'select', options: ['None','RabbitMQ','Apache Kafka','Redis Pub/Sub'], answer: 'Apache Kafka', hint: 'Best throughput for enterprise event streaming' },
+      { key: 'service_count', label: 'Initial Services', type: 'number', answer: 8, validate: v => v >= 5 && v <= 15, hint: '5-15 for manageable decomposition' },
+      { key: 'circuit_breaker', label: 'Circuit Breaker Pattern', type: 'select', options: ['None','Basic','Advanced with Fallback'], answer: 'Advanced with Fallback', hint: 'Enterprise requires graceful degradation' },
+      { key: 'service_mesh', label: 'Service Mesh', type: 'select', options: ['None','Istio','Linkerd','Consul Connect'], answer: 'Istio', hint: 'Most feature-rich for enterprise' },
+      { key: 'api_gateway', label: 'API Gateway', type: 'select', options: ['None','Kong','AWS API Gateway','Nginx'], answer: 'Kong', hint: 'Open-source, plugin-rich gateway' }
+    ]
+  },
+  {
+    id: 'monitoring',
+    icon: 'activity',
+    title: 'Monitoring & Observability',
+    desc: 'Configure logging, metrics, and alerting',
+    fields: [
+      { key: 'log_aggregator', label: 'Log Aggregation', type: 'select', options: ['None','ELK Stack','Splunk','Datadog'], answer: 'ELK Stack', hint: 'Elasticsearch+Logstash+Kibana, open-source standard' },
+      { key: 'metrics_tool', label: 'Metrics Platform', type: 'select', options: ['None','Prometheus','Grafana Cloud','New Relic'], answer: 'Prometheus', hint: 'De facto standard for cloud-native metrics' },
+      { key: 'alert_channels', label: 'Alert Channels', type: 'number', answer: 3, validate: v => v >= 2 && v <= 5, hint: '2-5: email, Slack, PagerDuty etc.' },
+      { key: 'retention_days', label: 'Log Retention (days)', type: 'number', answer: 90, validate: v => v >= 30 && v <= 365, hint: '30-365 days for compliance' },
+      { key: 'tracing', label: 'Distributed Tracing', type: 'select', options: ['None','Jaeger','Zipkin','OpenTelemetry'], answer: 'OpenTelemetry', hint: 'Vendor-neutral, future-proof standard' },
+      { key: 'uptime_sla', label: 'Target SLA (%)', type: 'number', answer: 99.9, validate: v => v >= 99.5 && v <= 99.999, hint: '99.5-99.999% for enterprise tier' }
+    ]
+  },
+  {
+    id: 'deployment',
+    icon: 'rocket',
+    title: 'CI/CD & Deployment',
+    desc: 'Set up the deployment pipeline',
+    fields: [
+      { key: 'container_runtime', label: 'Container Runtime', type: 'select', options: ['None','Docker','Podman','containerd'], answer: 'Docker', hint: 'Most widely adopted runtime' },
+      { key: 'orchestrator', label: 'Orchestrator', type: 'select', options: ['None','Kubernetes','Docker Swarm','Nomad'], answer: 'Kubernetes', hint: 'Enterprise container orchestration standard' },
+      { key: 'ci_tool', label: 'CI/CD Tool', type: 'select', options: ['Jenkins','GitHub Actions','GitLab CI','CircleCI'], answer: 'GitLab CI', hint: 'Integrated DevOps platform' },
+      { key: 'deploy_strategy', label: 'Deploy Strategy', type: 'select', options: ['Rolling','Blue-Green','Canary','Recreate'], answer: 'Canary', hint: 'Gradual rollout minimizes risk' },
+      { key: 'environments', label: 'Environment Count', type: 'number', answer: 4, validate: v => v >= 3 && v <= 6, hint: '3-6: dev, staging, QA, prod, etc.' },
+      { key: 'rollback_auto', label: 'Auto Rollback', type: 'select', options: ['Disabled','On Health Check Fail','On Error Rate Spike','Both'], answer: 'Both', hint: 'Maximum safety for enterprise' }
+    ]
+  }
+];
+
+// ===== TOAST =====
+function showToast(msg, type = 'info') {
+  const colors = { info: 'bg-sky-600', success: 'bg-emerald-600', error: 'bg-red-600', warning: 'bg-amber-600' };
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast ${colors[type]} text-white text-xs mono px-4 py-2 rounded-lg shadow-lg`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+// ===== TIMER =====
+function updateTimer() {
+  const elapsed = Math.floor((Date.now() - startTime) / 1000);
+  const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+  const s = String(elapsed % 60).padStart(2, '0');
+  document.getElementById('timer-label').textContent = `${m}:${s}`;
+}
+
+// ===== START =====
+function startChallenge() {
+  const input = document.getElementById('name-input');
+  const name = input.value.trim();
+  if (name.length < 2) {
+    document.getElementById('name-error').classList.remove('hidden');
+    input.classList.add('error');
+    return;
+  }
+  studentName = name;
+  startTime = Date.now();
+  currentScore = 0;
+  completedModules.clear();
+  activeModule = null;
+
+  document.getElementById('screen-login').classList.add('hidden');
+  document.getElementById('screen-builder').classList.remove('hidden');
+  document.getElementById('student-label').textContent = studentName;
+
+  timerInterval = setInterval(updateTimer, 1000);
+  renderModuleGrid();
+  updateProgress();
+}
+
+// ===== RENDER MODULES =====
+function renderModuleGrid() {
+  const grid = document.getElementById('module-grid');
+  grid.innerHTML = '';
+  modules.forEach((mod, idx) => {
+    const isCompleted = completedModules.has(mod.id);
+    const isLocked = idx > 0 && !completedModules.has(modules[idx - 1].id);
+    const isActive = activeModule === mod.id;
+
+    const card = document.createElement('div');
+    card.className = `module-card glass-panel rounded-xl p-4 cursor-pointer border-2 border-transparent ${isCompleted ? 'completed' : ''} ${isLocked ? 'locked' : ''} ${isActive ? 'active' : ''}`;
+    card.innerHTML = `
+      <div class="flex items-center justify-between mb-3">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center ${isCompleted ? 'bg-emerald-500/20' : 'bg-sky-500/10'}">
+          <i data-lucide="${isCompleted ? 'check-circle' : mod.icon}" class="w-5 h-5 ${isCompleted ? 'text-emerald-400' : 'text-sky-400'}"></i>
+        </div>
+        <span class="text-xs mono ${isCompleted ? 'text-emerald-400' : isLocked ? 'text-gray-600' : 'text-gray-400'}">${isCompleted ? 'COMPLETE' : isLocked ? 'LOCKED' : `${mod.fields.length} fields`}</span>
+      </div>
+      <h3 class="text-sm font-semibold text-white mb-1">${mod.title}</h3>
+      <p class="text-xs text-gray-400">${mod.desc}</p>
+    `;
+    if (!isLocked) {
+      card.onclick = () => openModule(mod.id);
+    }
+    grid.appendChild(card);
+  });
+  lucide.createIcons();
+}
+
+// ===== OPEN MODULE =====
+function openModule(modId) {
+  if (completedModules.has(modId)) {
+    showToast('Module already completed', 'info');
+    return;
+  }
+  activeModule = modId;
+  const mod = modules.find(m => m.id === modId);
+  const panel = document.getElementById('module-panel');
+  panel.classList.remove('hidden');
+  panel.innerHTML = `
+    <div class="flex items-center justify-between mb-5">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-sky-500/10 flex items-center justify-center">
+          <i data-lucide="${mod.icon}" class="w-5 h-5 text-sky-400"></i>
+        </div>
+        <div>
+          <h2 class="text-lg font-bold text-white">${mod.title}</h2>
+          <p class="text-xs text-gray-400">${mod.desc}</p>
+        </div>
+      </div>
+      <button onclick="closeModule()" class="text-gray-500 hover:text-white transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+      ${mod.fields.map(f => `
+        <div>
+          <label class="block text-xs text-gray-400 mb-1 mono uppercase tracking-wider">${f.label}</label>
+          ${f.type === 'select'
+            ? `<select id="field-${f.key}" class="config-field w-full bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2.5 text-white mono text-sm">
+                <option value="">-- Select --</option>
+                ${f.options.map(o => `<option value="${o}">${o}</option>`).join('')}
+              </select>`
+            : `<input id="field-${f.key}" type="number" step="any" class="config-field w-full bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2.5 text-white mono text-sm" placeholder="Enter value...">`
+          }
+          <p class="text-xs text-gray-600 mt-0.5 italic">💡 ${f.hint}</p>
+        </div>
+      `).join('')}
+    </div>
+    <div id="module-feedback" class="hidden mb-4 p-3 rounded-lg text-xs mono"></div>
+    <button onclick="submitModule('${mod.id}')" class="bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center gap-2 mono text-sm">
+      <i data-lucide="check" class="w-4 h-4"></i> Deploy Module
+    </button>
+  `;
+  lucide.createIcons();
+  renderModuleGrid();
+  panel.scrollIntoView({ behavior: 'smooth' });
+}
+
+function closeModule() {
+  activeModule = null;
+  document.getElementById('module-panel').classList.add('hidden');
+  renderModuleGrid();
+}
+
+// ===== SUBMIT MODULE =====
+function submitModule(modId) {
+  const mod = modules.find(m => m.id === modId);
+  let correct = 0;
+  let errors = [];
+
+  mod.fields.forEach(f => {
+    const el = document.getElementById(`field-${f.key}`);
+    let val = el.value;
+
+    if (f.type === 'number') {
+      val = parseFloat(val);
+      if (isNaN(val)) {
+        errors.push(`${f.label}: No value entered`);
+        el.classList.add('error');
+        el.classList.remove('valid');
+        return;
+      }
+      if (f.validate) {
+        if (f.validate(val)) { correct++; el.classList.add('valid'); el.classList.remove('error'); }
+        else { errors.push(`${f.label}: Value out of acceptable range`); el.classList.add('error'); el.classList.remove('valid'); }
+      } else if (val === f.answer) { correct++; el.classList.add('valid'); el.classList.remove('error'); }
+      else { errors.push(`${f.label}: Incorrect value`); el.classList.add('error'); el.classList.remove('valid'); }
+    } else {
+      if (!val) {
+        errors.push(`${f.label}: No selection made`);
+        el.classList.add('error');
+        el.classList.remove('valid');
+        return;
+      }
+      if (val === f.answer) { correct++; el.classList.add('valid'); el.classList.remove('error'); }
+      else { errors.push(`${f.label}: Incorrect selection`); el.classList.add('error'); el.classList.remove('valid'); }
+    }
+  });
+
+  const fb = document.getElementById('module-feedback');
+  fb.classList.remove('hidden');
+
+  const threshold = Math.ceil(mod.fields.length * 0.8);
+
+  if (correct >= threshold) {
+    const pts = correct * 10;
+    currentScore += pts;
+    completedModules.add(modId);
+    fb.className = 'mb-4 p-3 rounded-lg text-xs mono bg-emerald-500/10 border border-emerald-500/30 text-emerald-300';
+    fb.innerHTML = `✅ Module deployed! ${correct}/${mod.fields.length} correct (+${pts} pts)${errors.length ? '<br>Minor issues: ' + errors.join(', ') : ''}`;
+    showToast(`Module deployed! +${pts} pts`, 'success');
+    updateProgress();
+    document.getElementById('score-label').textContent = `Score: ${currentScore}`;
+    setStatus(`${mod.title} deployed successfully`);
+
+    setTimeout(() => {
+      activeModule = null;
+      document.getElementById('module-panel').classList.add('hidden');
+      renderModuleGrid();
+      if (completedModules.size === modules.length) finishChallenge();
+    }, 1500);
+  } else {
+    fb.className = 'mb-4 p-3 rounded-lg text-xs mono bg-red-500/10 border border-red-500/30 text-red-300';
+    fb.innerHTML = `❌ Deployment failed. Need ${threshold}/${mod.fields.length} correct, got ${correct}.<br>Errors:<br>• ${errors.join('<br>• ')}`;
+    showToast('Deployment failed — review errors', 'error');
+    setStatus('Deployment failed — fix configuration');
+  }
+}
+
+function updateProgress() {
+  const pct = (completedModules.size / modules.length) * 100;
+  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('progress-text').textContent = `${completedModules.size} / ${modules.length} modules`;
+}
+
+function setStatus(msg) {
+  document.getElementById('status-msg').innerHTML = `<span class="w-2 h-2 rounded-full bg-sky-500 inline-block"></span> ${msg}`;
+}
+
+// ===== FINISH =====
+async function finishChallenge() {
+  clearInterval(timerInterval);
+  const elapsed = Math.floor((Date.now() - startTime) / 1000);
+  const timeBonusMax = 300;
+  const timeBonus = Math.max(0, timeBonusMax - Math.floor(elapsed / 10));
+  const finalScore = currentScore + timeBonus;
+
+  // Save to Data SDK
+  if (allSubmissions.length < 999) {
+    const result = await window.dataSdk.create({
+      student_name: studentName,
+      score: finalScore,
+      modules_completed: Array.from(completedModules).join(','),
+      total_modules: modules.length,
+      completed_at: new Date().toISOString(),
+      time_taken_seconds: elapsed
+    });
+    if (result.isError) showToast('Failed to save result', 'error');
+  } else {
+    showToast('Storage limit reached', 'warning');
+  }
+
+  const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+  const s = String(elapsed % 60).padStart(2, '0');
+
+  const grade = finalScore >= 350 ? 'A+' : finalScore >= 300 ? 'A' : finalScore >= 250 ? 'B+' : finalScore >= 200 ? 'B' : 'C';
+  const gradeColor = grade.startsWith('A') ? 'text-emerald-400' : grade.startsWith('B') ? 'text-sky-400' : 'text-amber-400';
+
+  document.getElementById('screen-builder').classList.add('hidden');
+  document.getElementById('screen-results').classList.remove('hidden');
+  document.getElementById('results-panel').innerHTML = `
+    <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 mb-4 mx-auto relative pulse-ring ${gradeColor}">
+      <span class="text-3xl font-bold">${grade}</span>
+    </div>
+    <h2 class="text-2xl font-bold text-white mb-1">System Deployed!</h2>
+    <p class="text-gray-400 text-sm mb-6">Congratulations, ${studentName}</p>
+    <div class="grid grid-cols-3 gap-3 mb-6">
+      <div class="bg-slate-800/50 rounded-lg p-3">
+        <div class="text-xl font-bold text-white">${finalScore}</div>
+        <div class="text-xs text-gray-400">Total Score</div>
+      </div>
+      <div class="bg-slate-800/50 rounded-lg p-3">
+        <div class="text-xl font-bold text-white">${m}:${s}</div>
+        <div class="text-xs text-gray-400">Time</div>
+      </div>
+      <div class="bg-slate-800/50 rounded-lg p-3">
+        <div class="text-xl font-bold text-white">+${timeBonus}</div>
+        <div class="text-xs text-gray-400">Time Bonus</div>
+      </div>
+    </div>
+    <button onclick="restartChallenge()" class="bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors mono text-sm">
+      <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-1"></i> Try Again
+    </button>
+    ${allSubmissions.length > 1 ? `
+    <div class="mt-6 text-left">
+      <h3 class="text-xs text-gray-400 mono uppercase tracking-wider mb-2">Leaderboard</h3>
+      <div class="space-y-1">
+        ${[...allSubmissions].sort((a,b) => (b.score||0) - (a.score||0)).slice(0,5).map((s,i) => `
+          <div class="flex items-center justify-between text-xs mono py-1.5 px-2 rounded ${i===0?'bg-amber-500/10 text-amber-300':'text-gray-400'}">
+            <span>#${i+1} ${s.student_name}</span>
+            <span>${s.score} pts</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>` : ''}
+  `;
+  lucide.createIcons();
+}
+
+function restartChallenge() {
+  document.getElementById('screen-results').classList.add('hidden');
+  document.getElementById('screen-login').classList.remove('hidden');
+  document.getElementById('name-input').value = '';
+  currentScore = 0;
+  completedModules.clear();
+  activeModule = null;
+}
+
+// ===== DATA SDK =====
+const dataHandler = {
+  onDataChanged(data) {
+    allSubmissions = data;
+  }
+};
+
+// ===== ELEMENT SDK =====
+function applyConfig(config) {
+  const t = (k) => config[k] || defaultConfig[k];
+  const titleEl = document.getElementById('el-main-title');
+  const msgEl = document.getElementById('el-welcome-message');
+  if (titleEl) titleEl.textContent = t('main_title');
+  if (msgEl) msgEl.textContent = t('welcome_message');
+
+  document.body.style.fontFamily = `${t('font_family')}, Space Grotesk, sans-serif`;
+  const baseSize = t('font_size');
+  document.body.style.fontSize = baseSize + 'px';
+}
+
+window.elementSdk.init({
+  defaultConfig,
+  onConfigChange: async (config) => applyConfig(config),
+  mapToCapabilities: (config) => {
+    const c = (key) => ({
+      get: () => config[key] || defaultConfig[key],
+      set: (v) => { config[key] = v; window.elementSdk.setConfig({ [key]: v }); }
+    });
+    return {
+      recolorables: [c('background_color'), c('surface_color'), c('text_color'), c('primary_color'), c('accent_color')],
+      borderables: [],
+      fontEditable: c('font_family'),
+      fontSizeable: { get: () => config.font_size || defaultConfig.font_size, set: (v) => { config.font_size = v; window.elementSdk.setConfig({ font_size: v }); } }
+    };
+  },
+  mapToEditPanelValues: (config) => new Map([
+    ['main_title', config.main_title || defaultConfig.main_title],
+    ['welcome_message', config.welcome_message || defaultConfig.welcome_message]
+  ])
+});
+
+(async () => {
+  const res = await window.dataSdk.init(dataHandler);
+  if (res.isError) console.error('Data SDK init failed');
+})();
+
+// Name input validation
+document.getElementById('name-input').addEventListener('input', function() {
+  this.classList.remove('error');
+  document.getElementById('name-error').classList.add('hidden');
+});
+document.getElementById('name-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') startChallenge();
+});
+
+lucide.createIcons();
+</script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9e865ccc4150cd2f',t:'MTc3NTUzNjkxNC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
